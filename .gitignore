@@ -1,0 +1,16 @@
+node_modules/
+.next/
+.next-dev/
+.next-production/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+!.env.production.example
+
+.npm-cache/
+.pnpm-store/
+artifacts/
+*.tsbuildinfo
+.browser-preview/
