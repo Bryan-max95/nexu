@@ -7,6 +7,28 @@ import { databaseContext, createInitialState, hashPassword, verifyPassword, sign
 import { validateAttachment } from '../lib/attachments';
 import { resolveAppOrigin, OFFICIAL_APP_URL } from '../lib/app-origin';
 import { validateContactRequest } from '../lib/contact-request';
+import { getSubscriptionCharge, nextMonthlyDueDate } from '../lib/subscription-payments';
+
+test('activation is a one-time charge scoped to the company including historical payments', () => {
+ const subscription = { companyId: 'company-a', activationPaid: false };
+ const pricing = { activationPriceHnl: '4000.00', monthlyPriceHnl: '350.00' };
+ const receipt = { companyId: 'company-a', bankReference: 'A-123', paymentType: 'ACTIVACION_UNICA' as const };
+ const pending = { ...receipt, status: 'PENDIENTE' as const };
+ const approved = { ...receipt, status: 'APROBADO' as const };
+ const charge = (payments: Parameters<typeof getSubscriptionCharge>[1]) => getSubscriptionCharge(subscription, payments, pricing);
+ assert.deepEqual(charge([{ ...approved, companyId: 'company-b' }, { ...receipt, status: 'RECHAZADO' }]),
+   { paymentType: 'ACTIVACION_UNICA', amountHnl: '4000.00', pendingReference: null });
+ assert.equal(charge([pending]).pendingReference, 'A-123');
+ assert.deepEqual(charge([approved, pending]), { paymentType: 'MENSUALIDAD', amountHnl: '350.00', pendingReference: null });
+ assert.equal(getSubscriptionCharge({ ...subscription, activationPaid: true }, [], pricing).paymentType, 'MENSUALIDAD');
+ assert.equal(charge([approved, { ...pending, paymentType: 'MENSUALIDAD', bankReference: 'M-123' }]).pendingReference, 'M-123');
+});
+
+test('monthly due dates cover one calendar month even at the end of January', () => {
+ assert.equal(nextMonthlyDueDate('2027-01-31'), '2027-02-28');
+ assert.equal(nextMonthlyDueDate('2028-01-31'), '2028-02-29');
+ assert.equal(nextMonthlyDueDate('2026-12-22'), '2027-01-22');
+});
 
 test('public business inquiries require consent and bounded valid contact details',()=>{
  const valid={name:'Responsable de prueba',company:'Empresa de prueba',email:'contact@example.test',phone:'12345678',topic:'COMERCIAL',message:'Necesito conocer las capacidades del sistema para mi empresa.',consent:true};

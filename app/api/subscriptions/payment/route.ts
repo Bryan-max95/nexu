@@ -3,6 +3,7 @@ import { databaseRoute } from '@/lib/database';
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireCompanySession } from '@/lib/api-auth';
+import { getSubscriptionCharge } from '@/lib/subscription-payments';
 import {
   appendAuditLog,
   checkRolePermission,
@@ -22,8 +23,6 @@ async function handlePOST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const paymentType =
-      body.paymentType === 'ACTIVACION_UNICA' ? 'ACTIVACION_UNICA' : 'MENSUALIDAD';
     const bankReference = String(body.bankReference || '').trim().toUpperCase();
     const bankName = String(body.bankName || 'BAC Credomatic Honduras').trim();
     const receiptFilename = String(body.receiptFilename || 'Comprobante_Transferencia.pdf').trim();
@@ -37,6 +36,18 @@ async function handlePOST(req: NextRequest) {
     }
 
     const db = getDb();
+    const subscription = db.subscriptions.find((item) => item.companyId === company.id);
+    if (!subscription) return NextResponse.json({ error: 'Suscripción no encontrada.' }, { status: 404 });
+    const { paymentType, amountHnl, pendingReference } = getSubscriptionCharge(subscription, db.subscriptionPayments, db.systemConfig);
+    if ((body.paymentType ?? 'MENSUALIDAD') !== paymentType) {
+      const error = paymentType === 'MENSUALIDAD'
+        ? 'La activación ya está cubierta. El siguiente pago corresponde a la mensualidad.'
+        : 'Primero debe aprobarse la activación de la empresa.';
+      return NextResponse.json({ error }, { status: 409 });
+    }
+    if (pendingReference !== null) {
+      return NextResponse.json({ error: 'Ya hay un comprobante en revisión para este pago.' }, { status: 409 });
+    }
 
     // Prevent duplicate submission of the exact same bank reference (Section 4)
     if (
@@ -53,11 +64,6 @@ async function handlePOST(req: NextRequest) {
         { status: 409 }
       );
     }
-
-    const amountHnl =
-      paymentType === 'ACTIVACION_UNICA'
-        ? db.systemConfig.activationPriceHnl
-        : db.systemConfig.monthlyPriceHnl;
 
     const newPayment: SubscriptionPaymentRecord = {
       id: `pay-${crypto.randomUUID().slice(0, 8)}`,

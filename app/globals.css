@@ -9,11 +9,27 @@
 .marketing-root { overflow-x: clip; }
 .corporate-hero { background: radial-gradient(ellipse at 95% 0%,#7a1c240a,transparent 60%),#f5f5f7; }
 .terms-hero { background: radial-gradient(ellipse at 0 0,#7a1c2409,transparent 65%),#f4f5f8; }
-.security-brand-card { border-radius: 22px; background: radial-gradient(ellipse at 50% 20%,#6b233a60,transparent 68%),#24252b; color: #fff; padding: 28px; border: 1px solid #353740; box-shadow: 0 20px 50px #19202b12; }
-.security-seal-stage { display: flex; justify-content: center; align-items: center; min-height: 270px; }
-.security-seal-image { width: min(100%,280px); height: auto; filter: drop-shadow(0 12px 24px #0003); }
-.security-brand-card-compact .security-seal-stage { min-height: 210px; }
-.security-brand-card-compact .security-seal-image { max-width: 210px; }
+.security-seal-signature { display: inline-flex; align-items: center; gap: .75rem; border-radius: .5rem; }
+.security-seal-signature img { width: 72px; height: 72px; }
+.security-seal-floating {
+  position: fixed;
+  right: max(.875rem, env(safe-area-inset-right));
+  bottom: max(.875rem, env(safe-area-inset-bottom));
+  z-index: 25;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  padding: 2px;
+  border: 1px solid #7a1c2433;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 3px 12px #24171b26;
+}
+.security-seal-floating img { width: 100%; height: auto; }
+.security-seal-floating:hover, .security-seal-signature:hover { box-shadow: 0 0 0 2px #7a1c2440; }
+.security-seal-floating:focus-visible { outline: 3px solid #7a1c24; outline-offset: 3px; }
+.auth-bottom-bar, .marketing-root > footer > div > :last-child { padding-inline-end: 4.25rem; }
 .terms-policy-section { padding-block: 36px; border-bottom: 1px solid #e8ebf0; }
 .terms-policy-section:last-of-type { border-bottom: 0; }
 .terms-section-number { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; border: 1px solid #7a1c2418; background: #7a1c2406; border-radius: 11px; color: #7a1c24; font-size: 12px; font-weight: 600; }
@@ -31,8 +47,14 @@
 .terms-contact-box h3 { color: #3b424f; font-size: 13px; font-weight: 600; }
 .terms-contact-box > div > a { font-size: 14px; overflow-wrap: anywhere; }
 .terms-contact-action { margin-left: auto; font-size: 13px; font-weight: 600; }
-@media (max-width: 640px) { .terms-data-grid { grid-template-columns: 1fr; } .security-brand-card { padding: 23px; } .terms-contact-action { margin-left: 40px; } }
+@media (max-width: 640px) {
+  .terms-data-grid { grid-template-columns: 1fr; }
+  .terms-contact-action { margin-left: 40px; }
+  .security-seal-signature img { width: 60px; height: 60px; }
+  .security-seal-floating { width: 46px; height: 46px; right: max(.625rem, env(safe-area-inset-right)); bottom: max(.625rem, env(safe-area-inset-bottom)); }
+}
 @media print {
+  .security-seal-floating { display: none !important; }
   .terms-page header,.terms-page footer,.terms-page .terms-toc,.terms-page .terms-toolbar,.terms-page .terms-hero > div > div:first-child { display: none !important; }
   .terms-page,.terms-hero { background: #fff !important; }
   .terms-layout { display: block !important; padding-inline: 0 !important; }

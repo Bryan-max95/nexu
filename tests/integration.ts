@@ -8,7 +8,9 @@ import { getDb, hashPassword, signSessionToken, verifySessionToken } from '../li
 import { POST as login } from '../app/api/auth/login/route';
 import { POST as register } from '../app/api/auth/register/route';
 import { GET as company } from '../app/api/company/route';
-import { GET as admin } from '../app/api/admin/payments/approve/route';
+import { GET as admin, POST as review } from '../app/api/admin/payments/approve/route';
+import { GET as getSubscription } from '../app/api/subscriptions/route';
+import { POST as submitPayment } from '../app/api/subscriptions/payment/route';
 import { DELETE as logout } from '../app/api/auth/session/route';
 import { POST as clientSave, GET as clients } from '../app/api/clients/route';
 import { POST as issue } from '../app/api/documents/issue/route';
@@ -43,6 +45,45 @@ try {
  assert.equal((await login(request({action:'VERIFY_EMAIL',token:raw}))).status,422);
  const account=await login(request({email,password:'Integration-test-123'}));assert.equal(account.status,200);const accountData=await account.json();assert.equal(accountData.token,'');const token=decodeURIComponent(account.headers.get('set-cookie')!.split(';')[0].split('=')[1]);
  assert.equal((await company(read(token))).status,200);assert.equal((await admin(read(token))).status,403);
+ const readSubscription = async () => {
+   const response = await getSubscription(read(token));
+   assert.equal(response.status, 200);
+   return response.json();
+ };
+ const submit = (paymentType: string, ref: string) => submitPayment(request({
+   paymentType, bankReference: `${uid}-${ref}`, receiptFilename: 'transferencia.pdf',
+   receiptDataUrl: 'data:application/pdf;base64,JVBERi0xLjQ=',
+ }, token));
+ const reviewReceipt = (paymentId: string, decision: string) => review(request({
+   action: 'REVIEW_PAYMENT', paymentId, decision, rejectionReason: 'Referencia incorrecta',
+ }, rootData.token));
+ assert.equal((await readSubscription()).charge.paymentType, 'ACTIVACION_UNICA');
+ assert.equal((await submit('MENSUALIDAD', 'prematuro')).status, 409);
+ const activationRequests = await Promise.all([submit('ACTIVACION_UNICA', 'act-a'), submit('ACTIVACION_UNICA', 'act-b')]);
+ assert.deepEqual(activationRequests.map(r => r.status).sort(), [200, 409]);
+ const firstReceipt = (await activationRequests.find(r => r.ok)!.json()).payment;
+ assert.equal((await readSubscription()).charge.pendingReference, firstReceipt.bankReference);
+ assert.equal((await reviewReceipt(firstReceipt.id, 'RECHAZAR')).status, 200);
+ assert.equal((await readSubscription()).charge.pendingReference, null);
+ const activation = (await (await submit('ACTIVACION_UNICA', 'act-corregida')).json()).payment;
+ const legacyId = `legacy-duplicate-${uid}`;
+ await transaction(() => {
+   getDb().subscriptionPayments.push({ ...activation, id: legacyId, bankReference: legacyId });
+ });
+ assert.equal((await reviewReceipt(activation.id, 'APROBAR')).status, 200);
+ const activated = await readSubscription();
+ assert.deepEqual(activated.charge, { paymentType: 'MENSUALIDAD', amountHnl: activated.pricing.monthlyPriceHnl, pendingReference: null });
+ assert(activated.payments.some((p: { id: string; status: string }) => p.id === activation.id && p.status === 'APROBADO'));
+ assert.equal((await reviewReceipt(activation.id, 'APROBAR')).status, 409);
+ assert.equal((await reviewReceipt(legacyId, 'APROBAR')).status, 409);
+ assert.equal((await submit('ACTIVACION_UNICA', 'repetida')).status, 409);
+ const monthly = (await (await submit('MENSUALIDAD', 'mes-1')).json()).payment;
+ assert.equal(monthly.amountHnl, activated.pricing.monthlyPriceHnl);
+ assert.equal((await submit('MENSUALIDAD', 'duplicado')).status, 409);
+ assert.equal((await reviewReceipt(monthly.id, 'APROBAR')).status, 200);
+ const renewedSubscription = await readSubscription();
+ assert(renewedSubscription.subscription.nextPaymentDate > activated.subscription.nextPaymentDate);
+ assert.equal(renewedSubscription.charge.paymentType, 'MENSUALIDAD');
  const savedClient=await clientSave(request({name:'Cliente QA',rtn:'99999999999999'},token));assert.equal(savedClient.status,200,await savedClient.text());
  const list=await (await clients(read(token))).json();assert.equal(list.clients.length,1);
  await transaction(()=>{const db=getDb();const c=db.companies.find(c=>c.id===companyId)!;secondCompany=`qa-${uid}`;db.companies.push({...c,id:secondCompany});db.clients.push({id:uid,companyId:secondCompany,name:'PRIVATE OTHER COMPANY',rtn:'',address:'',whatsapp:'',email:''});const sub=db.subscriptions.find(s=>s.companyId===companyId)!;sub.activationPaid=true;sub.status='ACTIVA';sub.nextPaymentDate='2099-01-01';});

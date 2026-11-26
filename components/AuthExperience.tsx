@@ -41,7 +41,7 @@ export default function AuthExperience({ mode }: { mode: Mode }) {
       });
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||'No se pudo completar la solicitud.');
-      if(mode==='login'&&!action){window.location.assign('/panel');return;}
+      if(mode==='login'&&!action){form.reset();window.location.assign('/panel');return;}
       setDestination(String(fields.email||''));setMessage(data.message||'Correo verificado. Ya puedes iniciar sesión.');setSuccess(true);
     }catch(error){setMessage(error instanceof Error?error.message:'No se pudo conectar con el servidor. Intenta nuevamente.');}
     finally{setBusy(false);}

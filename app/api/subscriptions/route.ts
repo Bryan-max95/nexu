@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireCompanySession } from '@/lib/api-auth';
 import { calculateDaysRemaining } from '@/lib/fiscal-engine';
 import { getDb } from '@/lib/server-store';
+import { getSubscriptionCharge } from '@/lib/subscription-payments';
 
 async function handleGET(req: NextRequest) {
   try {
@@ -16,6 +17,7 @@ async function handleGET(req: NextRequest) {
 
     return NextResponse.json({
       subscription: sub || null,
+      charge: sub ? getSubscriptionCharge(sub, payments, db.systemConfig) : null,
       daysRemaining,
       payments,
       bankInstructions: db.systemConfig.bankInstructions,

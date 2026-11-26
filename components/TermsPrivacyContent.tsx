@@ -25,10 +25,25 @@ function PolicySection({ id, title, number, children }: { id:string; title:strin
 
 export default function TermsPrivacyContent() {
   return <div className="marketing-root terms-page bg-[#f7f8fa] text-[#24262a]"><MarketingNav/><main>
-    <section className="terms-hero"><div className="max-w-7xl mx-auto px-6 py-12 sm:py-16"><div className="text-sm text-neutral-500 flex gap-3 mb-10"><Link href="/">Inicio</Link><span aria-hidden="true">/</span><span>Términos y privacidad</span></div><div className="grid lg:grid-cols-[1.18fr_.82fr] gap-10 lg:gap-16 items-center">
-      <div><p className="section-kicker">Confianza, información y responsabilidad</p><h1 className="font-display text-4xl sm:text-5xl xl:text-6xl font-bold tracking-[-.045em] leading-[1.12] mt-5 mb-7">Términos de uso<br/><span className="text-[#7A1C24]">y privacidad.</span></h1><p className="text-lg text-neutral-600 leading-relaxed max-w-xl">Conoce cómo funciona BWP NEXO, qué información se utiliza para prestar el servicio y cuáles son las responsabilidades de quienes acceden a una cuenta empresarial.</p><div className="flex flex-wrap gap-3 mt-7"><span className="inline-flex gap-2 items-center bg-white border border-neutral-200 rounded-full px-4 py-2 text-xs text-neutral-500"><FileText className="w-3.5 h-3.5" aria-hidden="true"/>Información actualizada: 25 de noviembre de 2026</span><a href={OFFICIAL_APP_URL} className="inline-flex gap-2 items-center bg-white border border-neutral-200 rounded-full px-4 py-2 text-xs text-[#7A1C24]"><ShieldCheck className="w-3.5 h-3.5" aria-hidden="true"/>{OFFICIAL_APP_DOMAIN}</a></div><div className="mt-8"><TermsToolbar/></div></div>
-      <SecurityBrandSeal/>
-    </div></div></section>
+    <section className="terms-hero">
+      <div className="max-w-7xl mx-auto px-6 py-12 sm:py-16">
+        <div className="text-sm text-neutral-500 flex gap-3 mb-10"><Link href="/">Inicio</Link><span aria-hidden="true">/</span><span>Términos y privacidad</span></div>
+        <div className="grid lg:grid-cols-2 gap-6 lg:gap-16 lg:items-end">
+          <div>
+            <p className="section-kicker">Información del servicio</p>
+            <h1 className="font-display text-4xl sm:text-5xl xl:text-6xl font-bold tracking-[-.045em] leading-[1.12] mt-5">Términos de uso<br/><span className="text-[#7A1C24]">y privacidad.</span></h1>
+          </div>
+          <div>
+            <p className="text-lg text-neutral-600 leading-relaxed max-w-xl">Conoce cómo funciona BWP NEXO, qué información se utiliza para prestar el servicio y cuáles son las responsabilidades de quienes acceden a una cuenta empresarial.</p>
+            <div className="mt-5"><TermsToolbar/></div>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-3 mt-7">
+          <span className="inline-flex gap-2 items-center bg-white border border-neutral-200 rounded-full px-4 py-2 text-xs text-neutral-500"><FileText className="w-3.5 h-3.5" aria-hidden="true"/>Actualizado el 25 de noviembre de 2026</span>
+          <a href={OFFICIAL_APP_URL} className="inline-flex gap-2 items-center bg-white border border-neutral-200 rounded-full px-4 py-2 text-xs text-[#7A1C24]"><ShieldCheck className="w-3.5 h-3.5" aria-hidden="true"/>{OFFICIAL_APP_DOMAIN}</a>
+        </div>
+      </div>
+    </section>
 
     <section aria-label="Controles de acceso a la plataforma" className="bg-white border-y border-neutral-200"><div className="max-w-7xl mx-auto px-6 grid sm:grid-cols-3 gap-7 py-7">{[
       {icon:Mail,title:'Correo verificado',text:'Confirmación antes del acceso empresarial.'},
@@ -97,7 +112,10 @@ export default function TermsPrivacyContent() {
           <p>El formulario guarda una referencia para que BWP revise la consulta. No incluyas contraseñas, tokens de acceso ni documentos confidenciales en el mensaje.</p>
           <div className="terms-contact-box"><Mail className="w-6 h-6 text-[#7A1C24] shrink-0" aria-hidden="true"/><div><h3>Contacto BWP</h3><a href="mailto:bwpsoporte@gmail.com">bwpsoporte@gmail.com</a></div><Link href="/contacto" className="terms-contact-action">Registrar una consulta</Link></div>
         </PolicySection>
-        <div className="py-7 text-xs text-neutral-400 leading-relaxed border-t border-neutral-200">BWP NEXO · Una empresa BWP · {OFFICIAL_APP_DOMAIN}<br/>Información del servicio actualizada el 25 de noviembre de 2026.</div>
+        <div className="flex flex-wrap items-center justify-between gap-4 py-6 border-t border-neutral-200 break-inside-avoid">
+          <p className="text-xs text-neutral-500 leading-relaxed">BWP NEXO · Una empresa BWP · {OFFICIAL_APP_DOMAIN}<br/>Información del servicio actualizada el 25 de noviembre de 2026.</p>
+          <SecurityBrandSeal />
+        </div>
       </article>
     </div>
   </main><MarketingFooter/></div>;

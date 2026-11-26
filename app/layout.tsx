@@ -1,7 +1,9 @@
 import type {Metadata} from 'next';
 import { Plus_Jakarta_Sans, DM_Sans, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
+import SecurityBrandSeal from '@/components/SecurityBrandSeal';
 import { OFFICIAL_APP_URL } from '@/lib/app-origin';
+import WorkspaceSessionGuard from '@/components/WorkspaceSessionGuard';
 
 const plusJakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -42,7 +44,8 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
     <html lang="es" className={`${plusJakarta.variable} ${dmSans.variable} ${jetbrainsMono.variable}`}>
       <body suppressHydrationWarning className="font-sans bg-[#FAFAFA] text-[#141414] antialiased selection:bg-[#7A1C24] selection:text-white">
-        {children}
+        <WorkspaceSessionGuard>{children}</WorkspaceSessionGuard>
+        <SecurityBrandSeal floating />
       </body>
     </html>
   );

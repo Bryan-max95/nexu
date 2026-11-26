@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   AlertCircle,
   Ban,
@@ -43,6 +44,7 @@ import {
 } from '@/lib/fiscal-engine';
 import { PaperSize, PdfDocumentPayload, TemplateId } from '@/lib/pdf-generator';
 import InvoiceTemplatePreview from './InvoiceTemplatePreview';
+import type { getSubscriptionCharge } from '@/lib/subscription-payments';
 
 export type EnterpriseModule =
   | 'INICIO'
@@ -175,7 +177,8 @@ export default function EnterprisePortal({
   const [inviteCanExport, setInviteCanExport] = useState(true);
 
   // New Payment Receipt Upload State (Section 17)
-  const [payType, setPayType] = useState<'ACTIVACION_UNICA' | 'MENSUALIDAD'>('MENSUALIDAD');
+  const charge: ReturnType<typeof getSubscriptionCharge> | undefined = subscriptionData?.charge;
+  const isMonthly = charge?.paymentType === 'MENSUALIDAD';
   const [payBankName, setPayBankName] = useState('BAC Credomatic Honduras');
   const [payReference, setPayReference] = useState('');
   const [payFilename, setPayFilename] = useState('Comprobante_Transferencia_BWP.pdf');
@@ -231,11 +234,7 @@ export default function EnterprisePortal({
         setClientSuggestions(docsJson.clientSuggestions || []);
       }
       if (subRes.ok) {
-        const subJson = await subRes.json();
-        setSubscriptionData(subJson);
-        if (subJson.subscription && !subJson.subscription.activationPaid) {
-          setPayType('ACTIVACION_UNICA');
-        }
+        setSubscriptionData(await subRes.json());
       }
     } catch {
       setFeedback({ type: 'ERR', text: 'Error al sincronizar datos con el servidor.' });
@@ -259,6 +258,19 @@ export default function EnterprisePortal({
     }, 0);
     return () => window.clearTimeout(id);
   }, [loadAllPortalData]);
+
+  useEffect(() => {
+    if (activeModule !== 'MI_SUSCRIPCION' || !charge?.pendingReference) return;
+    function refreshWhenVisible() {
+      if (document.visibilityState === 'visible') void loadAllPortalData();
+    }
+    const timer = window.setInterval(refreshWhenVisible, 60_000);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [activeModule, charge?.pendingReference, loadAllPortalData]);
 
   // Live client-side preview calculation matching server ExactDecimal engine
   const liveCalculation = useMemo(() => {
@@ -902,6 +914,7 @@ export default function EnterprisePortal({
 
   async function handleSubmitPaymentReceipt(e: React.FormEvent) {
     e.preventDefault();
+    if (!charge || charge.pendingReference !== null || !receiptDataUrl) return;
     const res = await fetch('/api/subscriptions/payment', {
       method: 'POST',
       headers: {
@@ -909,7 +922,7 @@ export default function EnterprisePortal({
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        paymentType: payType,
+        paymentType: charge.paymentType,
         bankName: payBankName,
         bankReference: payReference,
         receiptFilename: payFilename,
@@ -920,10 +933,13 @@ export default function EnterprisePortal({
     const json = await res.json();
     if (!res.ok) {
       setFeedback({ type: 'ERR', text: json.error || 'Error al enviar comprobante.' });
+      if (res.status === 409) await loadAllPortalData();
     } else {
       setFeedback({ type: 'OK', text: json.message });
       setPayReference('');
       setPayNotes('');
+      setPayFilename('');
+      setReceiptDataUrl('');
       await loadAllPortalData();
     }
   }
@@ -984,7 +1000,7 @@ export default function EnterprisePortal({
 
         {/* Secondary Access: Role Switcher for Testing, Help/Support, and Logout (Section 5) */}
         <div className="p-4 border-t border-neutral-200 space-y-3 text-xs">
-          <a href="/clientes" className="block py-2 font-semibold text-[#7A1C24]">Mis clientes</a>
+          <Link href="/clientes" className="block py-2 font-semibold text-[#7A1C24]">Mis clientes</Link>
           <div className="pt-2 border-t border-neutral-100 flex items-center justify-between text-neutral-600">
             <a
               href="https://wa.me/50499009900"
@@ -1061,9 +1077,11 @@ export default function EnterprisePortal({
                   Emisión fiscal bloqueada por estado comercial (
                   {fiscalStatus.subscription?.status || 'PENDIENTE'}):
                 </strong>{' '}
-                {fiscalStatus.subscription?.status === 'PENDIENTE_ACTIVACION'
-                  ? 'Para habilitar la emisión de documentos fiscales debe cubrir la activación única de L 4,000.00 y contar con la aprobación del superadministrador BWP.'
-                  : 'Su suscripción mensual de L 350.00 se encuentra vencida. Sus documentos históricos están disponibles para consulta, descarga PDF y exportación.'}
+                {charge?.pendingReference
+                  ? 'Su comprobante está en revisión. Puede consultar su estado en Mi suscripción.'
+                  : charge?.paymentType === 'ACTIVACION_UNICA'
+                    ? `Para habilitar la emisión, registre el comprobante de activación por ${formatCurrency(charge.amountHnl)}.`
+                    : 'Consulte el estado de su suscripción en el panel. Sus documentos históricos están disponibles para consulta, descarga PDF y exportación.'}
               </div>
               <button
                 onClick={() => setActiveModule('MI_SUSCRIPCION')}
@@ -3090,7 +3108,7 @@ export default function EnterprisePortal({
           {/* ===================================================================== */}
           {activeModule === 'MI_SUSCRIPCION' && subscriptionData && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white border border-neutral-200 p-5">
                   <div className="text-xs text-neutral-500">Plan Contratado</div>
                   <div className="font-display font-bold text-base text-neutral-950 mt-1">
@@ -3102,23 +3120,12 @@ export default function EnterprisePortal({
                 </div>
 
                 <div className="bg-white border border-neutral-200 p-5">
-                  <div className="text-xs text-neutral-500">Activación Única (L 4,000.00)</div>
-                  <div className="font-display font-bold text-xl font-mono tabular-nums mt-1">
-                    {subscriptionData.subscription?.activationPaid ? (
-                      <span className="text-emerald-700">Pagada y Verificada</span>
-                    ) : (
-                      <span className="text-amber-700">Pendiente (L 4,000.00)</span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="bg-white border border-neutral-200 p-5">
-                  <div className="text-xs text-neutral-500">Mensualidad Recurrente</div>
+                  <div className="text-xs text-neutral-500">{isMonthly ? 'Suscripción mensual' : 'Activación de la empresa'}</div>
                   <div className="font-display font-bold text-xl text-neutral-950 font-mono tabular-nums mt-1">
-                    L {subscriptionData.pricing?.monthlyPriceHnl || '350.00'} / mes
+                    {charge ? formatCurrency(charge.amountHnl) : 'Pendiente de configuración'}{isMonthly && ' / mes'}
                   </div>
                   <div className="text-xs text-neutral-500 mt-1">
-                    Renovación explícita (sin cobros ocultos)
+                    {isMonthly ? 'Renovación mensual por transferencia' : 'Pago único por empresa'}
                   </div>
                 </div>
 
@@ -3127,11 +3134,11 @@ export default function EnterprisePortal({
                   <div className="font-display font-bold text-lg text-[#7A1C24] mt-1">
                     {subscriptionData.subscription?.status}
                   </div>
-                  <div className="text-xs text-neutral-600 font-mono tabular-nums mt-1">
+                  {isMonthly && <div className="text-xs text-neutral-600 font-mono tabular-nums mt-1">
                     Próximo pago:{' '}
                     {formatHondurasDateDisplay(subscriptionData.subscription?.nextPaymentDate)} (
                     {subscriptionData.daysRemaining} días)
-                  </div>
+                  </div>}
                 </div>
               </div>
 
@@ -3154,27 +3161,24 @@ export default function EnterprisePortal({
                     <p>{subscriptionData.bankInstructions}</p>
                   </div>
 
-                  {currentUser.role === 'PROPIETARIO' ? (
+                  {!charge ? (
+                    <p className="text-xs text-neutral-600">Contacte a soporte para consultar su suscripción.</p>
+                  ) : charge.pendingReference !== null ? (
+                    <div role="status" className="space-y-2 rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                      <p className="font-semibold">Comprobante en revisión</p>
+                      <p>Referencia bancaria {charge.pendingReference}. BWP verificará la transferencia.</p>
+                      <button type="button" onClick={() => void loadAllPortalData()} className="font-semibold underline">Actualizar estado</button>
+                    </div>
+                  ) : currentUser.role === 'PROPIETARIO' ? (
                     <form onSubmit={handleSubmitPaymentReceipt} className="space-y-3">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-semibold text-neutral-700 mb-1">
+                          <div className="block text-xs font-semibold text-neutral-700 mb-1">
                             Concepto de pago
-                          </label>
-                          <select
-                            value={payType}
-                            onChange={(e) =>
-                              setPayType(e.target.value as 'ACTIVACION_UNICA' | 'MENSUALIDAD')
-                            }
-                            className="w-full px-3 py-2 text-xs border border-neutral-300 bg-white"
-                          >
-                            <option value="ACTIVACION_UNICA">
-                              Activación Única por Empresa (L 4,000.00)
-                            </option>
-                            <option value="MENSUALIDAD">
-                              Suscripción Mensual por Empresa (L 350.00)
-                            </option>
-                          </select>
+                          </div>
+                          <p className="py-2 text-sm font-semibold text-neutral-950">
+                            {isMonthly ? 'Mensualidad' : 'Activación única'} · {formatCurrency(charge.amountHnl)}
+                          </p>
                         </div>
 
                         <div>
@@ -3234,7 +3238,8 @@ export default function EnterprisePortal({
 
                       <button
                         type="submit"
-                        className="px-5 py-2.5 bg-[#7A1C24] hover:bg-[#60141B] text-white text-xs font-semibold cursor-pointer"
+                        disabled={!receiptDataUrl}
+                        className="px-5 py-2.5 bg-[#7A1C24] hover:bg-[#60141B] text-white text-xs font-semibold cursor-pointer disabled:opacity-60"
                       >
                         Subir comprobante para verificación BWP
                       </button>
@@ -3247,10 +3252,10 @@ export default function EnterprisePortal({
                 </div>
 
                 {/* Payment History */}
-                <div className="lg:col-span-6 bg-white border border-neutral-200 p-6 space-y-4">
-                  <h3 className="font-display font-bold text-base text-neutral-950">
-                    Historial de Pagos y Comprobantes de la Empresa
-                  </h3>
+                <details className="lg:col-span-6 self-start bg-white border border-neutral-200 p-6 space-y-4">
+                  <summary className="cursor-pointer font-display font-bold text-base text-neutral-950">
+                    Historial de pagos y comprobantes
+                  </summary>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse text-xs">
                       <thead>
@@ -3269,7 +3274,7 @@ export default function EnterprisePortal({
                               <td className="py-2.5 px-3 font-mono text-[11px] text-neutral-500">
                                 {p.createdAtUtc.slice(0, 10)}
                               </td>
-                              <td className="py-2.5 px-3">{p.paymentType}</td>
+                              <td className="py-2.5 px-3">{p.paymentType === 'ACTIVACION_UNICA' ? 'Activación única' : 'Mensualidad'}</td>
                               <td className="py-2.5 px-3 font-mono">{p.bankReference}</td>
                               <td className="py-2.5 px-3 text-right font-mono tabular-nums font-semibold">
                                 {formatCurrency(p.amountHnl)}
@@ -3293,7 +3298,7 @@ export default function EnterprisePortal({
                       </tbody>
                     </table>
                   </div>
-                </div>
+                </details>
               </div>
             </div>
           )}

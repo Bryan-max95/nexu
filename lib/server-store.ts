@@ -514,7 +514,7 @@ export function runAutomaticNotificationsCheck(companyId: string): NotificationR
   }
 
   const sub = db.subscriptions.find((s) => s.companyId === companyId);
-  if (sub) {
+  if (sub?.activationPaid) {
     const daysToSub = calculateDaysRemaining(sub.nextPaymentDate);
     if (daysToSub <= 7) {
       const threshold = daysToSub < 0 ? 'VENCIDA' : daysToSub <= 1 ? '1D' : daysToSub <= 3 ? '3D' : '7D';

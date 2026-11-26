@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSuperAdminSession } from '@/lib/api-auth';
 import { getHondurasDateString } from '@/lib/fiscal-engine';
+import { getSubscriptionCharge, nextMonthlyDueDate } from '@/lib/subscription-payments';
 import {
   appendAuditLog,
   getDb,
@@ -129,11 +130,11 @@ async function handlePOST(req: NextRequest) {
           return NextResponse.json({ error: 'Pago no encontrado.' }, { status: 404 });
         }
 
-        if (payment.status === 'APROBADO') {
+        if (payment.status !== 'PENDIENTE') {
           return NextResponse.json(
             {
               error:
-                'Bloqueo de seguridad (409): Este pago ya fue aprobado anteriormente. No se permite aprobar dos veces un mismo pago.',
+                'Este comprobante ya fue revisado.',
             },
             { status: 409 }
           );
@@ -146,6 +147,15 @@ async function handlePOST(req: NextRequest) {
           );
         }
 
+        const sub = db.subscriptions.find((s) => s.companyId === payment.companyId);
+        if (decision === 'APROBADO') {
+          if (!sub) return NextResponse.json({ error: 'Suscripción no encontrada.' }, { status: 404 });
+          const charge = getSubscriptionCharge(sub, db.subscriptionPayments, db.systemConfig);
+          if (payment.paymentType !== charge.paymentType) {
+            return NextResponse.json({ error: 'Este concepto de pago ya no corresponde al estado de la suscripción.' }, { status: 409 });
+          }
+        }
+
         payment.status = decision;
         payment.reviewedBy = adminSession.name;
         payment.reviewedAtUtc = new Date().toISOString();
@@ -153,18 +163,13 @@ async function handlePOST(req: NextRequest) {
           payment.rejectionReason = rejectionReason;
         }
 
-        const sub = db.subscriptions.find((s) => s.companyId === payment.companyId);
         if (sub && decision === 'APROBADO') {
           const today = getHondurasDateString();
-          const [y, m, d] = today.split('-').map(Number);
-          const nextMonthDate = new Date(Date.UTC(y, m, d)); // +1 month
-          const nextYyyyMmDd = nextMonthDate.toISOString().slice(0, 10);
-
-          if (payment.paymentType === 'ACTIVACION_UNICA') {
-            sub.activationPaid = true;
-          }
+          const periodStart = payment.paymentType === 'MENSUALIDAD' && sub.nextPaymentDate > today ? sub.nextPaymentDate : today;
+          const nextYyyyMmDd = nextMonthlyDueDate(periodStart);
+          sub.activationPaid = true;
           sub.status = 'ACTIVA';
-          sub.currentPeriodStart = today;
+          sub.currentPeriodStart = periodStart;
           sub.nextPaymentDate = nextYyyyMmDd;
           sub.updatedAtUtc = new Date().toISOString();
 
@@ -223,9 +228,7 @@ async function handlePOST(req: NextRequest) {
         if (newStatus === 'ACTIVA') {
           sub.activationPaid = true;
           const today = getHondurasDateString();
-          const [y, m, d] = today.split('-').map(Number);
-          const nextMonthDate = new Date(Date.UTC(y, m, d));
-          sub.nextPaymentDate = nextMonthDate.toISOString().slice(0, 10);
+          sub.nextPaymentDate = nextMonthlyDueDate(today);
         }
         sub.updatedAtUtc = new Date().toISOString();
 
